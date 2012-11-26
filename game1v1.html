@@ -1,0 +1,514 @@
+<!doctype html>
+<html>
+	<head>
+		<title>3D Bomber(草帽团作品，@冬天极寒之冰,@数字建筑网)</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #f0f0f0;
+				margin: 0px;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+	<body>
+
+		<script src="Three.js"></script>
+		<script src="Stats.js"></script>
+        <script src="magictouch.js"></script>
+        <script src="enemyData.js"></script>
+        <!--<script src="detectCollision.js"></script>-->
+
+		<script type="text/javascript">
+			var container, stats;
+
+			var camera, scene, renderer,gameover = 0;
+
+			var cube, plane;
+            var lookAtX,lookAtY,lookAtZ,lookAtAngle1 = Math.PI/2,lookAtAngle2 = 0,R=1000;
+			var landa=0;
+			var targetRotation = 0;
+			var targetRotationOnMouseDown = 0;
+			
+			 var ambientLight,directionalLight;
+
+
+            var box = [] ,bomb,road = []; 
+			var roadx,roadz;
+			var iFire,iFireArr = [];
+			
+			var iEnemy,iEnemyArr = [],enemyNumber =0;
+			var html5Url = "http://www.html5dw.com/index/";
+			var x,y;//移动端的代码
+			
+			var keyArr = [];
+//敌人的类
+function enemy(obj){
+    this.startX = obj.startx;
+	this.endX = obj.endx;
+	this.startZ = obj.startz;
+	this.endZ = obj.endz;
+	this.dir = obj.dir;
+	this.dir2 = obj.dir2;
+	this.delta = obj.delta;
+	this.die = 0;
+	this.mybody = null;
+}
+
+enemy.prototype.create = function(){
+	this.mybody = new THREE.Mesh(new THREE.SphereGeometry(5), new THREE.MeshBasicMaterial( { map: THREE.ImageUtils.loadTexture( 'luffy.jpg' ), overdraw: true } ) );
+    scene.add(this.mybody);
+
+    //this.mybody = new THREE.Particle(getMaterial("0x0000ff"));
+    this.mybody.position.x = this.startX;
+	this.mybody.position.y = 0;
+	this.mybody.position.z = this.startZ;
+	//this.mybody.scale.x = this.mybody.scale.y = 5;
+	enemyNumber++;
+	scene.add(this.mybody);
+}
+
+enemy.prototype.move = function(){
+	    this.mybody.rotation.y += 0.1;
+	    if(this.dir=="x"){
+			if(this.dir2 == 1 && this.mybody.position.x>Math.max(this.startX,this.endX)){
+		        this.dir2 = -1;
+				this.delta = -0.5;
+			}
+			else if(this.dir2 == -1 && this.mybody.position.x<Math.min(this.startX,this.endX)){
+			    this.dir2 = 1;
+				this.delta = 0.5;
+			}
+			this.mybody.position.x += this.delta;
+		}
+		else if(this.dir == "z"){
+		    if(this.dir2 == 1 && this.mybody.position.z>Math.max(this.startZ,this.endZ)){
+				this.dir2 = -1;
+		        this.delta = -0.5;
+			}
+			else if(this.dir2 == -1 && this.mybody.position.z<Math.min(this.startZ,this.endZ)){
+			    this.dir2 = 1;
+				this.delta = 0.5;
+			}
+			this.mybody.position.z += this.delta;
+		}
+		
+		if(iFireArr.length!=0){
+		    for(var i = 0,len = iFireArr.length;i<len;i++){
+				if(this.die == 1){
+				    return ;
+				}
+		        if(getDistance(this.mybody.position.x,this.mybody.position.z,iFireArr[i].cube.position.x,iFireArr[i].cube.position.z)<10){
+				    this.clear();
+			    }
+		    }
+		}
+		if(this.die == 1 || gameover ==1) return ;
+		if(getDistance(camera.position.x,camera.position.z,this.mybody.position.x,this.mybody.position.z)<10){
+			gameover = 1;
+		    if(confirm("You are dead.\nTry again?")) window.location.reload();
+			else window.location.href = html5Url;
+		}
+}
+
+enemy.prototype.clear = function (){
+    this.die = 1;
+	enemyNumber--;
+	scene.remove(this.mybody);
+}
+			
+		function getMaterial(_color){
+			return new THREE.ParticleCanvasMaterial({
+					        color: _color,
+					        program: function ( context ){
+						        context.beginPath();
+						        context.arc( 0, 0, 1, 0,Math.PI*2,true);
+						        context.closePath();
+						        context.fill();
+					        }
+		    });
+		}
+			
+	function getMaterialCube(_color){
+	    var materialFire = [];
+	    for ( var i = 0; i < 6; i ++ ) {
+			materialFire.push( new THREE.MeshBasicMaterial({color:_color}));
+		}
+		return materialFire;
+	}
+			window.onload = function(){
+				//alert('财富，名声，权力，拥有互联网一切的代码王"HTML5",在降生时说了一句话,让全世界的码农们,趋之若鹜,奔向code jam："想要互联网的财宝吗？想要的话可以给你，去HTML5 Code jam里找吧！我把一切都放在那里了！"于是无数的码农开始coding，趋之若鹜的奔向code jam，世界迎来了"大前端时代"。');
+				//alert("调试中，请勿骚扰......");
+			    init();
+			    animate();
+			}
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+                
+				var info = document.createElement( 'div' );
+				info.style.position = 'absolute';
+				info.style.top = '10px';
+				info.style.width = '100%';
+				info.style.textAlign = 'center';
+				info.innerHTML = '第四期HTML5 code jam 草帽团 3D Bomber.@冬天极寒之冰,@数字建筑网<br/>左右转换视角,上下前后移动，空格放置炸弹，w引爆<br/><a href="http://www.hiwebgl.com/?p=628#WebGL-2" target="_blank">不能跑webgl的狠狠点击这里</a>';
+				container.appendChild( info );
+               
+			   //特意帮老大宣传的logo
+				var logo = document.createElement("div");
+				logo.style.position = 'absolute';
+				logo.style.width = "50px";
+				logo.style.height = "50px";
+				logo.style.top = '10px';
+                logo.style.right = "100px";
+				logo.innerHTML = '<a href="'+html5Url+'" target="_blank" title="Html5梦工场"><img src="h5.png" width="50" height="50"/></a>';
+				document.body.appendChild(logo);
+			   //
+				scene = new THREE.Scene();
+
+				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 1000);
+				camera.position.x = 0;
+				camera.position.y = 6;
+				camera.position.z = 175;
+				
+				scene.add( camera );
+
+				// 墙壁
+
+				var materials = [];
+
+				for ( var i = 0; i < 6; i ++ ) {
+					materials.push( new THREE.MeshBasicMaterial( { color: Math.random() * 0xffffff } ) );
+				}
+                for(var i=0;i<10;i++){
+	               for(var j = 0; j<10;j++){
+					   /*
+				       cube = new THREE.Mesh( new THREE.CubeGeometry( 10, 10, 10, 1, 1, 1 ,materials), new THREE.MeshFaceMaterial({ color: 0xe0e0e0}));
+				       cube.position.x = i*20+5;
+				       cube.position.y = 0;
+				       cube.position.z = j*20+5;
+				       box.push({"x1":cube.position.x-5,"x2":cube.position.x+5,"z1":cube.position.z-5,"z2":cube.position.z+5});
+				       scene.add(cube);
+					   */
+				       cube = new THREE.Mesh(new THREE.CubeGeometry(10,10,10),new THREE.MeshBasicMaterial( { map: THREE.ImageUtils.loadTexture('wall.gif')}));
+					   cube.position.x = i*20+5;
+				       cube.position.y = 0;
+				       cube.position.z = j*20+5;
+				       box.push({"x1":cube.position.x-5,"x2":cube.position.x+5,"z1":cube.position.z-5,"z2":cube.position.z+5});
+				       scene.add(cube);
+                   }
+                 }
+				 
+				 //
+				 //草地
+				 mesh = new THREE.Mesh( new THREE.PlaneGeometry( 200, 200, 20, 20 ), new THREE.MeshBasicMaterial( { map: THREE.ImageUtils.loadTexture( 'grass.png' ), overdraw: true } ) );
+				 mesh.position.x = 100;
+				 mesh.position.z = 100;
+				 mesh.position.y = -6;
+				 scene.add( mesh );
+				 
+				 
+				 
+				 
+				 //初始化敌人
+				 for(var i = 0;i<enemyData.length;i++){
+					 iEnemyArr.push(new enemy(enemyData[i]));
+				     iEnemyArr[i].create();
+					 iEnemyArr[i].move();
+				 }
+				 //
+				 /*
+				 //光照
+				     ambientLight = new THREE.AmbientLight(0xff0000);
+				     scene.add(ambientLight);
+
+				     directionalLight = new THREE.DirectionalLight(0xff0000,2);
+				     directionalLight.position.set(200,10,200);
+				     scene.add(directionalLight);
+				 //
+				 */
+				 // 背景音乐
+				 document.getElementById("au2").play();
+				 //
+				 
+	
+	//道路的中心点数组
+	    for(roadx=5;roadx<190;roadx+=10)
+		{
+		    for(roadz=15;roadz<190;roadz+=20)
+			{
+			    road.push({"x":roadx,"z":roadz});
+			}
+		}
+		
+		for(roadx=15;roadx<190;roadx+=20)
+		{
+			for(roadz=5;roadz<190;roadz+=10)
+			{
+			    road.push({"x":roadx,"z":roadz});
+			}
+		}
+	//
+	
+				renderer = new THREE.CanvasRenderer();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				container.appendChild( renderer.domElement );
+
+				stats = new Stats();
+				stats.domElement.style.position = 'absolute';
+				stats.domElement.style.top = '10px';
+				container.appendChild( stats.domElement );
+                document.addEventListener("keydown",function(e){onkeydown(e);},false);
+				document.addEventListener("keyup",function(e){onkeyup(e);},false);
+			}//init
+
+function getDistance(x1,z1,x2,z2)
+{
+   return Math.sqrt(Math.pow(x1-x2,2)+Math.pow(z1-z2,2));
+}
+/*第一版的O(n)算法*/
+function detectCollision(x,z)
+{
+	var flag = 0;
+    for(var i=0 ; i < 100; i++)
+	{
+        if(x>box[i].x1 && x<box[i].x2 && z>box[i].z1 && z<box[i].z2)
+		{
+		    flag = 1;
+			break;
+		}
+	}
+	return flag;
+}
+
+
+
+function isRoad(x,z)
+{
+    var flag = 1;
+    for(var i=0 ; i < 100; i++)
+	{
+        if(x-5==box[i].x1 && x+5==box[i].x2 && z-5==box[i].z1 && z+5==box[i].z2)
+		{
+		    flag = 0;
+			break;
+		}
+	}
+	return flag;
+}
+
+function onkeydown(e){
+	var e = event || window.event;     
+	var keycode = e.which ? e.which : e.keyCode;
+				switch (keycode){
+				    case 37:
+					    keyArr[37] = 1;
+						break;
+					case 39:
+					    keyArr[39] = 1;
+						break;	
+					case 38:
+					    keyArr[38] = 1;
+						break;
+					case 40:
+					    keyArr[40] = 1;
+						break;
+                    case 32:
+					     keyArr[32] = 1;
+					     break;
+					 case 87:
+					     keyArr[87] = 1;
+						 break;
+				}
+}
+
+
+function onkeyup(e){
+	var e = event || window.event;     
+	var keycode = e.which ? e.which : e.keyCode;
+				switch (keycode){
+				    case 37:
+					    keyArr[37] = 0;
+						break;
+					case 39:
+					    keyArr[39] = 0;
+						break;	
+					case 38:
+					    keyArr[38] = 0;
+						break;
+					case 40:
+					    keyArr[40] = 0;
+						break;
+                    case 32:
+					     keyArr[32] = 0;
+					     break;
+					 case 87:
+					     keyArr[87] = 0;
+						 break;
+				}
+}
+
+
+
+
+function handleKey(){
+				var tmpx,tmpz;
+				if(keyArr[37]){
+				    lookAtAngle1 += 0.1;
+				}
+				if(keyArr[39]){
+				    lookAtAngle1 -= 0.1;
+				}
+				if(keyArr[38]){
+				    landa = 0.001;
+				    tmpx = (camera.position.x+landa*lookAtX)/(1+landa);
+					tmpz = (camera.position.z+landa*lookAtZ)/(1+landa);
+					if(detectCollision(tmpx,tmpz) || tmpx>190 || tmpx<0 || tmpz>190 || tmpz<0) return ;
+					camera.position.x = tmpx;
+					camera.position.z = tmpz;
+				}
+				if(keyArr[40]){
+				    landa = -0.001;
+					tmpx = (camera.position.x+landa*lookAtX)/(1+landa);
+					tmpz = (camera.position.z+landa*lookAtZ)/(1+landa);
+					if(detectCollision(tmpx,tmpz) || tmpx>190 || tmpx<0 || tmpz>190 || tmpz<0) return ;
+					camera.position.x = tmpx;
+					camera.position.z = tmpz;
+				}
+				
+				if(keyArr[32]){
+				         if(bomb) return ;
+						 bomb = new THREE.Particle(getMaterial(0x000000));
+						 
+						 for(var i =0,len=road.length,disMin = 100000,tmpDis=0,tmpX,tmpZ;i<len;i++)
+						 {
+					         tmpDis = getDistance(camera.position.x,camera.position.z,road[i].x,road[i].z);
+							 if(tmpDis<disMin){
+								  disMin = tmpDis;
+								  tmpX = road[i].x;
+								  tmpZ = road[i].z;
+							 }
+						 }
+						 
+				         bomb.position.x = tmpX;
+				         bomb.position.y = 0;
+				         bomb.position.z = tmpZ;
+				         bomb.scale.x = bomb.scale.y = 5;
+				         scene.add(bomb);
+				}
+				if(keyArr[87]){
+				         if(!bomb) return ;
+					     document.getElementById("au1").play();
+						 if(isRoad(bomb.position.x-10,bomb.position.z)){
+							iFire = new fire(bomb.position.x-10,bomb.position.z);
+						    iFire.draw();
+							iFireArr.push(iFire);
+						 }
+						 if(isRoad(bomb.position.x+10,bomb.position.z)){
+						    iFire = new fire(bomb.position.x+10,bomb.position.z);
+							iFire.draw();
+							iFireArr.push(iFire);
+						 }
+						 if(isRoad(bomb.position.x,bomb.position.z-10)){
+						    iFire = new fire(bomb.position.x,bomb.position.z-10);
+							iFire.draw();
+							iFireArr.push(iFire);
+						 }
+						 if(isRoad(bomb.position.x,bomb.position.z+10)){
+						    iFire = new fire(bomb.position.x,bomb.position.z+10);
+							iFire.draw();
+							iFireArr.push(iFire);
+						 }
+						 iFire = new fire(bomb.position.x,bomb.position.z);
+						 iFire.draw();
+						 iFireArr.push(iFire);
+						 
+						 scene.remove(bomb);
+						 bomb = null;
+				}
+			}
+
+//  火焰
+function fire(x,z)
+{
+    this.x = x;
+	this.y = 0;
+	this.z = z;
+	this.lifeTime = 2000;
+	this.born = new Date().getTime();
+	this.material = getMaterialCube(0xff0000);
+	this.cube = 0;
+	this.die = 0;
+}
+
+fire.prototype.draw = function(){
+     this.cube = new THREE.Mesh( new THREE.CubeGeometry( 10, 10, 10, 1, 1, 1, this.material ), new THREE.MeshFaceMaterial({color: 0xe0e0e0}));
+	 this.cube.position.x = this.x;
+	 this.cube.position.y = this.y;
+	 this.cube.position.z = this.z;
+	 scene.add(this.cube);
+};
+
+fire.prototype.clear = function(){
+    scene.remove(this.cube);
+	this.die = 1;
+};
+			function animate() {
+				requestAnimationFrame(animate);
+				render();
+				stats.update();
+			}
+
+			function render() {
+				handleKey();
+                lookAtZ = R*Math.cos(lookAtAngle1)+camera.position.z;    
+				lookAtX = R*Math.sin(lookAtAngle1)*Math.cos(lookAtAngle2)+camera.position.x;
+				//lookAtY = R*Math.sin(lookAtAngle1)*Math.sin(lookAtAngle2)+camera.position.y;
+				lookAtY = 6;
+				if(iFireArr.length!=0){
+					  var f = 0;
+				       for(var i=0 , len=iFireArr.length ; i< len;i++)
+				      {
+				           if(new Date().getTime()>iFireArr[i].born + iFireArr[i].lifeTime){
+					           iFireArr[i].clear();
+					       }
+						   if(iFireArr[i].die==0){
+						       f = 1;
+						   }
+						   if(gameover == 1) return ;
+						   if(iFireArr[i].die==0){
+					           if(getDistance(camera.position.x,camera.position.z,iFireArr[i].cube.position.x,iFireArr[i].cube.position.z)<10){
+							   gameover = 1;
+		                       if(confirm("You have been bomb dead.\nTry again?")) window.location.reload();
+			                   else window.location.href = html5Url;
+		                      }
+					      }
+				      }
+					  if(f==0) iFireArr = [];
+				}
+				for(var i = 0 , len = iEnemyArr.length ; i< len; i++)
+				{
+				    iEnemyArr[i].move();
+				}
+				if(gameover == 0){ 
+				    if(enemyNumber == 0){
+					    gameover = 1;
+				        if(confirm("You Win\nTry again?")) window.location.reload();
+					    else window.location.href = html5Url;
+				    }
+				}
+				camera.lookAt({x:lookAtX,y:lookAtY,z:lookAtZ});
+				renderer.render( scene, camera );
+
+			}
+
+		</script>
+<audio src="explode.wav" id="au1" width="0px" height="0px"></audio>
+<audio src="bgMusic.mp3" id="au2" width="0px" height="0px" loop="loop"></audio>
+	</body>
+</html>
